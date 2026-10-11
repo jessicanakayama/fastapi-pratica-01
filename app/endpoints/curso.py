@@ -8,17 +8,22 @@ from app.database import get_db
 from app.models.curso import Curso
 from app.schemas import CursoCreate, CursoResponse
 
+# Linha Adicionada
+from app.core import requer_coordenador, requer_professor_ou_coordenador
+
 # Roteador com o prefixo e a tag para organizar o Swagger
 router = APIRouter(
     prefix="/cursos",
     tags=["Cursos"]
 )
 
+# APENAS COORDENADORES podem criar cursos
 # --- 1. CRIAR CURSO (POST /cursos) ---
 @router.post("", response_model=CursoResponse, status_code=status.HTTP_201_CREATED)
 async def criar_curso(
     curso_dados: CursoCreate, 
     db: AsyncSession = Depends(get_db), 
+    _=Depends(requer_coordenador)
 ):
     novo_curso = Curso(nome=curso_dados.nome, duracao=curso_dados.duracao)
     db.add(novo_curso)
@@ -28,35 +33,36 @@ async def criar_curso(
     statement = (
         select(Curso)
         .options(
-            selectinload(Curso.disciplina),
-            selectinload(Curso.aluno),
+            selectinload(Curso.disciplina)
         )
         .where(Curso.id == novo_curso.id)
     )
     result = await db.execute(statement)
     return result.scalar_one()
 
+# QUALQUER UM LOGADO (Professor ou Coordenador) pode listar cursos
 # --- 2. LISTAR TODOS OS CURSOS (GET /cursos) ---
 @router.get("", response_model=List[CursoResponse])
 async def listar_cursos(
     db: AsyncSession = Depends(get_db), 
+    _=Depends(requer_professor_ou_coordenador)
 ):
     statement = select(Curso).options(
-        selectinload(Curso.disciplina),
-        selectinload(Curso.aluno),
+        selectinload(Curso.disciplina)
     )
     result = await db.execute(statement)
     return result.scalars().all()
 
+# QUALQUER UM LOGADO (Professor ou Coordenador) pode buscar cursos
 # --- 3. BUSCAR UM CURSO POR ID (GET /cursos/{curso_id}) ---
 @router.get("/{curso_id}", response_model=CursoResponse)
 async def buscar_curso(
     curso_id: int, 
     db: AsyncSession = Depends(get_db), 
+    _=Depends(requer_professor_ou_coordenador)
 ):
     statement = select(Curso).options(
-        selectinload(Curso.disciplina),
-        selectinload(Curso.aluno),
+        selectinload(Curso.disciplina)
     ).where(Curso.id == curso_id)
     result = await db.execute(statement)
     curso = result.scalar_one_or_none()
@@ -65,12 +71,14 @@ async def buscar_curso(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Curso não encontrado")
     return curso
 
+# APENAS COORDENADORES podem alterar cursos
 # --- 4. ATUALIZAR UM CURSO (PUT /cursos/{curso_id}) ---
 @router.put("/{curso_id}", response_model=CursoResponse)
 async def atualizar_curso(
     curso_id: int, 
     curso_dados: CursoCreate, 
     db: AsyncSession = Depends(get_db), 
+    _=Depends(requer_coordenador)
 ):
     result = await db.execute(select(Curso).where(Curso.id == curso_id))
     curso = result.scalar_one_or_none()
@@ -86,19 +94,20 @@ async def atualizar_curso(
     statement = (
         select(Curso)
         .options(
-            selectinload(Curso.disciplina),
-            selectinload(Curso.aluno),
+            selectinload(Curso.disciplina)
         )
         .where(Curso.id == curso_id)
     )
     result = await db.execute(statement)
     return result.scalar_one()
 
+# APENAS COORDENADORES podem deltar cursos
 # --- 5. DELETAR UM CURSO (DELETE /cursos/{curso_id}) ---
 @router.delete("/{curso_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deletar_curso(
     curso_id: int, 
     db: AsyncSession = Depends(get_db), 
+    _=Depends(requer_coordenador)
 ):
     result = await db.execute(select(Curso).where(Curso.id == curso_id))
     curso = result.scalar_one_or_none()
